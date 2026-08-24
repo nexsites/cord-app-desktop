@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.4](https://github.com/stoatchat/for-desktop/compare/v1.5.3...v1.5.4) (2026-08-24)
+
+
+### Bug Fixes
+
+* Ensure that autolaunch is configured ([#294](https://github.com/stoatchat/for-desktop/issues/294)) ([c1df8a7](https://github.com/stoatchat/for-desktop/commit/c1df8a7afece95623992e3eaeaa5508437bdda7f))
+* Remove tmpdir env as it's not needed anymore ([#295](https://github.com/stoatchat/for-desktop/issues/295)) ([68cfeb5](https://github.com/stoatchat/for-desktop/commit/68cfeb5c8e802fc30c5dc774b617b3371811753d))
+
 ## [1.5.3](https://github.com/stoatchat/for-desktop/compare/v1.5.2...v1.5.3) (2026-08-19)
 
 
