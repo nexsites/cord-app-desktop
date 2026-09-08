@@ -1,86 +1,51 @@
-<div align="center">
-<h1>
-  Stoat for Desktop
-  
-  [![Stars](https://img.shields.io/github/stars/stoatchat/for-desktop?style=flat-square&logoColor=white)](https://github.com/stoatchat/for-desktop/stargazers)
-  [![Forks](https://img.shields.io/github/forks/stoatchat/for-desktop?style=flat-square&logoColor=white)](https://github.com/stoatchat/for-desktop/network/members)
-  [![Pull Requests](https://img.shields.io/github/issues-pr/stoatchat/for-desktop?style=flat-square&logoColor=white)](https://github.com/stoatchat/for-desktop/pulls)
-  [![Issues](https://img.shields.io/github/issues/stoatchat/for-desktop?style=flat-square&logoColor=white)](https://github.com/stoatchat/for-desktop/issues)
-  [![Contributors](https://img.shields.io/github/contributors/stoatchat/for-desktop?style=flat-square&logoColor=white)](https://github.com/stoatchat/for-desktop/graphs/contributors)
-  [![License](https://img.shields.io/github/license/stoatchat/for-desktop?style=flat-square&logoColor=white)](https://github.com/stoatchat/for-desktop/blob/main/LICENSE)
-</h1>
-Application for Windows, macOS, and Linux.
-</div>
-<br/>
+# Cord Desktop
 
-## Installation
+Native desktop app for [Cord](https://cord-app.com) — private, self-hosted chat.
 
-<a href="https://repology.org/project/stoat-desktop/versions">
-    <img src="https://repology.org/badge/vertical-allrepos/stoat-desktop.svg" alt="Packaging status" align="right">
-</a>
+Windows for now (macOS + Linux may return later). Auto-updates via GitHub
+releases; users don't have to reinstall to get new versions.
 
-- All downloads and instructions for Stoat can be found on our [Website](https://stoat.chat/download).
+## Download
 
-## Development Guide
+The latest installer is on the [releases page](https://github.com/nexsites/cord-app-desktop/releases/latest)
+and mirrored at <https://cord-app.com/download>.
 
-_Contribution guidelines for Desktop app TBA!_
+Windows may warn "Windows protected your PC — Unrecognized app" the first time
+you run the installer. The app isn't code-signed (would cost ~$100/yr).
+Click **More info → Run anyway** and it installs normally; the warning goes
+away as SmartScreen accumulates trust from downloads.
 
-<!-- Before contributing, make yourself familiar with [our contribution guidelines](https://developers.revolt.chat/contrib.html), the [code style guidelines](./GUIDELINES.md), and the [technical documentation for this project](https://revoltchat.github.io/frontend/). -->
-
-Before getting started, you'll want to install:
-
-- [Git](https://git-scm.com/install/)
-- [mise-en-place](https://mise.jdx.dev/getting-started.html)
-
-Then proceed to setup:
+## Build (from source)
 
 ```bash
-# clone the repository
-git clone --recursive https://github.com/stoatchat/for-desktop stoat-for-desktop
-cd stoat-for-desktop
-
-# Install tools from mise
-mise install
-
-# install all packages
-mise install:frozen
-
-# start the application
-mise dev
-# ... or build the bundle
-mise build
-# ... or build all distributables
-mise make
+git clone https://github.com/nexsites/cord-app-desktop
+cd cord-app-desktop
+pnpm install
+pnpm start          # dev — launches Electron pointing at cord-app.com
+pnpm make           # produces installer + portable ZIP under out/make/
 ```
 
-Various useful commands for development testing:
+Requirements on the build host: Node 20+, pnpm, and (for producing the Squirrel
+installer on Linux) Mono. On Windows the Squirrel path is native.
 
-```bash
-# connect to the development server
-mise exec -- pnpm start -- --force-server http://localhost:5173
+## What this is
 
-# test the flatpak (after `make`)
-mise exec -- pnpm install:flatpak
-mise exec -- pnpm run:flatpak
-# ... also connect to dev server like so:
-mise exec -- pnpm run:flatpak --force-server http://localhost:5173
+A thin Electron wrapper around the Cord web client at cord-app.com. Everything
+users actually interact with — auth, messaging, uploads, voice — is the same
+code that runs in a browser. The wrapper adds:
 
-# Nix-specific instructions for testing
-pnpm package
-pnpm run:nix
-# ... as before:
-pnpm run:nix --force-server=http://localhost:5173
-# a better solution would be telling
-# Electron Forge where system Electron is
-```
+- Windows Start Menu entry, taskbar identity, custom uninstaller
+- Autostart-on-login (opt-in via Settings → Native)
+- System tray with quick-open
+- Auto-updates from GitHub releases (no reinstall)
+- Native notifications, mic/screen-share access without per-tab prompts
+- Discord Rich Presence (disabled until Cord has a registered Discord app id)
 
-### Pulling in Stoat's assets
+## Fork lineage
 
-If you want to pull in Stoat brand assets after pulling, run the following:
+Forked from [`stoatchat/for-desktop`](https://github.com/stoatchat/for-desktop),
+which is itself a Stoat rebrand of [`revoltchat/desktop`](https://github.com/revoltchat/desktop).
+Preserves the upstream AGPL-3.0 license.
 
-```bash
-# update the assets
-mise assets
-```
-
-Currently, this is required to build, any forks are expected to provide their own assets.
+Cord-specific changes recorded in commit history — the substantive ones are
+rebranding, Windows-only makers, and the auto-update repository target.

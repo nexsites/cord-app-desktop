@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-#MISE description="Run the desktop app in dev mode"
-set -e
-
-pnpm run start
