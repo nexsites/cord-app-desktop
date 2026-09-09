@@ -16,8 +16,97 @@ import windowIconAsset from "../../assets/desktop/icon.png?asset";
 import { config } from "./config";
 import { updateTrayMenu } from "./tray";
 
-// global reference to main window
+// global references
 export let mainWindow: BrowserWindow;
+export let splashWindow: BrowserWindow | null = null;
+
+/**
+ * Cord: Discord-style splash window shown at launch while we check for updates.
+ * Small, frameless, always-on-top, dark to match the app theme. Content is a
+ * data-URL so we have zero extra assets to ship and Vite doesn't have to know
+ * about a second HTML entry. `setSplashStatus()` from main.ts updates the
+ * status line via `webContents.executeJavaScript` — trivial IPC replacement.
+ */
+export function createSplashWindow(): BrowserWindow {
+  const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+    :root { color-scheme: dark; }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-user-select: none; user-select: none; }
+    html, body { width: 100%; height: 100%; }
+    body {
+      background: #101823; color: #e5e5ea;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 22px;
+      -webkit-app-region: drag; /* draggable frameless window */
+    }
+    .brand { font-size: 46px; font-weight: 700; letter-spacing: 2px; color: #fff; }
+    .status { font-size: 13.5px; color: #a5a5b0; min-height: 1.2em; text-align: center; padding: 0 20px; }
+    .bar {
+      width: 240px; height: 3px; background: #262b36; border-radius: 999px; overflow: hidden;
+    }
+    .bar::before {
+      content: ''; display: block; width: 40%; height: 100%;
+      background: linear-gradient(90deg, transparent, #5865f2, transparent);
+      animation: sweep 1.4s linear infinite;
+    }
+    @keyframes sweep {
+      0%   { transform: translateX(-100%); }
+      100% { transform: translateX(350%); }
+    }
+  </style></head><body>
+    <div class="brand">Cord</div>
+    <div class="status" id="s">Checking for updates…</div>
+    <div class="bar"></div>
+  </body></html>`;
+
+  splashWindow = new BrowserWindow({
+    width: 380,
+    height: 240,
+    frame: false,
+    resizable: false,
+    movable: true,
+    minimizable: false,
+    maximizable: false,
+    closable: false, // user shouldn't dismiss it — auto-closes on update-check finish
+    alwaysOnTop: true,
+    center: true,
+    show: false, // show on ready-to-show to avoid a white flash
+    backgroundColor: "#101823",
+    icon: windowIcon,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  splashWindow.setMenu(null);
+  splashWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+  splashWindow.once("ready-to-show", () => splashWindow?.show());
+  splashWindow.on("closed", () => {
+    splashWindow = null;
+  });
+  return splashWindow;
+}
+
+/** Update the splash's status line. Silent no-op if the splash is gone. */
+export function setSplashStatus(text: string) {
+  if (!splashWindow || splashWindow.isDestroyed()) return;
+  const safe = text.replace(/[\\`$]/g, "\\$&");
+  splashWindow.webContents
+    .executeJavaScript(
+      `document.getElementById('s') && (document.getElementById('s').textContent = \`${safe}\`)`,
+    )
+    .catch(() => {});
+}
+
+/** Close the splash if still open. Safe to call multiple times. */
+export function closeSplash() {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    // .closable was set to false; force-destroy is the right verb
+    splashWindow.destroy();
+  }
+  splashWindow = null;
+}
 
 // currently in-use build
 export const BUILD_URL = new URL(

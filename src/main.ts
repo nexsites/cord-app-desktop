@@ -19,7 +19,14 @@ import { config } from "./native/config";
 import { initDiscordRpc } from "./native/discordRpc";
 import { initTray } from "./native/tray";
 import { initVirtualMic } from "./native/virtualMic";
-import { BUILD_URL, createMainWindow, mainWindow } from "./native/window";
+import {
+  BUILD_URL,
+  closeSplash,
+  createMainWindow,
+  createSplashWindow,
+  mainWindow,
+  setSplashStatus,
+} from "./native/window";
 
 // Squirrel-specific logic
 // create/remove shortcuts on Windows when installing / uninstalling
@@ -96,48 +103,83 @@ const onNotifyUser = (info: IUpdateInfo) => {
 };
 
 if (acquiredLock) {
-  // start auto update logic
+  // Cord: launch flow is Discord-style.
   //
-  // Cord: updates are served from cord-app.com directly instead of GitHub
-  // releases via update.electronjs.org. Reason: the operator has a wildly
-  // asymmetric home connection (~230 Mbps down, ~0.7 Mbps up), so uploading
-  // 400+ MB of Squirrel artifacts to GitHub per release takes ~90 minutes.
-  // Serving from cord-app.com is a local `cp` on apex — instant to publish,
-  // downloads served through the existing Cloudflare tunnel with CF's CDN in
-  // front for the users.
+  //   1. Splash window opens immediately (small, frameless, sweeping bar).
+  //   2. `update-electron-app` fires an update check against cord-app.com.
+  //   3. autoUpdater emits events we translate into the splash's status text.
+  //   4. If an update is available, splash sits on "Downloading update…" while
+  //      Squirrel downloads it, then "Restarting to apply update…" and calls
+  //      quitAndInstall — user never sees the main window on this launch.
+  //   5. If no update is available (or the check hangs > 5s), close the splash
+  //      and open the main window normally.
   //
-  // The Squirrel autoUpdater fetches RELEASES + the current nupkg from this
-  // base URL exactly as it would from update.electronjs.org — the endpoint
-  // just isn't hosted by us running Electron's proxy.
-  updateElectronApp({
-    updateSource: {
-      type: UpdateSourceType.StaticStorage,
-      baseUrl: "https://cord-app.com/download/win32-x64/",
-    },
-    onNotifyUser,
-  });
+  // The 5s bail-out matters: update polling can stall silently — CF cache miss,
+  // proxy blip, whatever — and we should not block Cord's launch indefinitely
+  // waiting on the update service. update-electron-app keeps polling in the
+  // background either way, so the user gets any update on the next 10-min tick
+  // via `onNotifyUser`.
 
-  // create and configure the app when electron is ready
-  app.on("ready", () => {
-    // create window and application contexts
+  let updateResolved = false;
+  const openMainWindowOnce = () => {
+    if (updateResolved) return;
+    updateResolved = true;
+    closeSplash();
     createMainWindow();
-
-    // save first launch state
-    if (config.firstLaunch) {
-      // Doesn't do anything right now. Used to enable auto start, but that behaviour was removed.
-      // Left in case it gets used in the future.
-      config.firstLaunch = false;
-    }
-
     initTray();
     initDiscordRpc();
     initVirtualMic();
     initAutoLaunch();
-
-    // Windows specific fix for notifications
     if (process.platform === "win32") {
       app.setAppUserModelId("com.cord.notifications");
     }
+    if (config.firstLaunch) {
+      config.firstLaunch = false;
+    }
+  };
+
+  app.on("ready", () => {
+    createSplashWindow();
+
+    // wire autoUpdater events to the splash before update-electron-app fires
+    autoUpdater.on("checking-for-update", () => {
+      setSplashStatus("Checking for updates…");
+    });
+    autoUpdater.on("update-not-available", () => {
+      openMainWindowOnce();
+    });
+    autoUpdater.on("update-available", () => {
+      setSplashStatus("Downloading update…");
+    });
+    autoUpdater.on("update-downloaded", () => {
+      setSplashStatus("Restarting to apply update…");
+      // Small delay so the user reads the message before the app dies.
+      setTimeout(() => autoUpdater.quitAndInstall(), 700);
+    });
+    autoUpdater.on("error", (err) => {
+      // update service unreachable / bad manifest / etc. — treat as "no update,
+      // open the app" so a broken update endpoint never bricks the launcher.
+      console.warn("[cord] update check error:", err?.message || err);
+      openMainWindowOnce();
+    });
+
+    // fire the update check
+    updateElectronApp({
+      updateSource: {
+        type: UpdateSourceType.StaticStorage,
+        baseUrl: "https://cord-app.com/download/win32-x64/",
+      },
+      onNotifyUser, // still used for update-available events after the app is running
+    });
+
+    // hard timeout: if the update check hasn't resolved either way in 5 s,
+    // open the app anyway. Background polling continues.
+    setTimeout(() => {
+      if (!updateResolved) {
+        setSplashStatus("Taking longer than usual — opening Cord…");
+        setTimeout(openMainWindowOnce, 400);
+      }
+    }, 5000);
   });
 
   // focus the window if we try to launch again

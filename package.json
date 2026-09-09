@@ -1,7 +1,7 @@
 {
   "name": "cord-desktop",
   "productName": "Cord",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Cord — private, self-hosted chat, desktop app.",
   "main": ".vite/build/main.js",
   "repository": "nexsites/cord-app-desktop",
