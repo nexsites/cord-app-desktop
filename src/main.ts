@@ -120,32 +120,54 @@ if (acquiredLock) {
   // background either way, so the user gets any update on the next 10-min tick
   // via `onNotifyUser`.
 
+  // Minimum splash duration — even if the update check answers instantly,
+  // the splash stays up for this long. Feels intentional rather than a flash.
+  const SPLASH_MIN_MS = 3000;
+  let splashOpenedAt = 0;
   let updateResolved = false;
+
   const openMainWindowOnce = () => {
     if (updateResolved) return;
     updateResolved = true;
-    closeSplash();
-    createMainWindow();
-    initTray();
-    initDiscordRpc();
-    initVirtualMic();
-    initAutoLaunch();
-    if (process.platform === "win32") {
-      app.setAppUserModelId("com.cord.notifications");
-    }
-    if (config.firstLaunch) {
-      config.firstLaunch = false;
-    }
+
+    // Hold the splash open until we've hit the minimum duration.
+    const elapsed = Date.now() - splashOpenedAt;
+    const wait = Math.max(0, SPLASH_MIN_MS - elapsed);
+
+    setTimeout(() => {
+      // ORDER MATTERS: create the main window BEFORE destroying the splash.
+      // If we destroy the splash first, there's a split-second window with
+      // zero BrowserWindows open, which fires `window-all-closed` and the
+      // Electron app quits itself entirely. Symptom: app opens, then closes.
+      // Diagnosed v1.0.4 → v1.0.5.
+      createMainWindow();
+      closeSplash();
+      initTray();
+      initDiscordRpc();
+      initVirtualMic();
+      initAutoLaunch();
+      if (process.platform === "win32") {
+        app.setAppUserModelId("com.cord.notifications");
+      }
+      if (config.firstLaunch) {
+        config.firstLaunch = false;
+      }
+    }, wait);
   };
 
   app.on("ready", () => {
     createSplashWindow();
+    splashOpenedAt = Date.now();
 
     // wire autoUpdater events to the splash before update-electron-app fires
     autoUpdater.on("checking-for-update", () => {
       setSplashStatus("Checking for updates…");
     });
     autoUpdater.on("update-not-available", () => {
+      // Tell the user something did happen; splash will still linger to hit
+      // the minimum-duration bar. Feels intentional instead of a stale
+      // "Checking for updates…" that never resolved.
+      setSplashStatus("You're on the latest version");
       openMainWindowOnce();
     });
     autoUpdater.on("update-available", () => {
