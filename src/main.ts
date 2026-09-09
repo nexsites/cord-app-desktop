@@ -1,4 +1,8 @@
-import { IUpdateInfo, updateElectronApp } from "update-electron-app";
+import {
+  IUpdateInfo,
+  UpdateSourceType,
+  updateElectronApp,
+} from "update-electron-app";
 
 import {
   BrowserWindow,
@@ -93,7 +97,25 @@ const onNotifyUser = (info: IUpdateInfo) => {
 
 if (acquiredLock) {
   // start auto update logic
-  updateElectronApp({ onNotifyUser });
+  //
+  // Cord: updates are served from cord-app.com directly instead of GitHub
+  // releases via update.electronjs.org. Reason: the operator has a wildly
+  // asymmetric home connection (~230 Mbps down, ~0.7 Mbps up), so uploading
+  // 400+ MB of Squirrel artifacts to GitHub per release takes ~90 minutes.
+  // Serving from cord-app.com is a local `cp` on apex — instant to publish,
+  // downloads served through the existing Cloudflare tunnel with CF's CDN in
+  // front for the users.
+  //
+  // The Squirrel autoUpdater fetches RELEASES + the current nupkg from this
+  // base URL exactly as it would from update.electronjs.org — the endpoint
+  // just isn't hosted by us running Electron's proxy.
+  updateElectronApp({
+    updateSource: {
+      type: UpdateSourceType.StaticStorage,
+      baseUrl: "https://cord-app.com/download/win32-x64/",
+    },
+    onNotifyUser,
+  });
 
   // create and configure the app when electron is ready
   app.on("ready", () => {
