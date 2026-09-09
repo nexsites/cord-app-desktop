@@ -10,6 +10,7 @@ import {
   app,
   autoUpdater,
   dialog,
+  session,
   shell,
 } from "electron";
 import started from "electron-squirrel-startup";
@@ -155,7 +156,32 @@ if (acquiredLock) {
     }, wait);
   };
 
-  app.on("ready", () => {
+  app.on("ready", async () => {
+    // Cord: on every launch, wipe the service-worker registration + its
+    // cachestorage BEFORE we load any web content. The Cord UI is a PWA
+    // that Vite ships with a Workbox service worker; without this, the SW
+    // will happily keep serving whatever bundle it cached from the previous
+    // launch, so users don't see server-side deploys (polls/onboarding/etc)
+    // until they explicitly hard-refresh. Cookies + localStorage are left
+    // alone so login state persists across launches.
+    //
+    // Cost: ~1-3 seconds extra load on each launch as the ~1MB bundle is
+    // re-fetched from cord-app.com. Worth it — the whole point of this
+    // shell is that when we ship, users see it. If cache saves us a second
+    // but shows stale UI for a week, it's the wrong trade.
+    //
+    // See also cord-app-client packages/client/src/serviceWorker.ts, which
+    // has the client-side skipWaiting+claim we shipped as v0.15.0-cord5 —
+    // this desktop change makes that mechanism reliable in the Electron
+    // shell even when the SW dance fails to hand over.
+    try {
+      await session.defaultSession.clearStorageData({
+        storages: ["serviceworkers", "cachestorage"],
+      });
+    } catch (err) {
+      console.warn("[cord] failed to clear web cache on launch:", err);
+    }
+
     createSplashWindow();
     splashOpenedAt = Date.now();
 
